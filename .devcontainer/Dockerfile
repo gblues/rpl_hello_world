@@ -21,6 +21,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
       gnupg \
       git \
       git-restore-mtime \
+      lftp \
       locales \
       make \
       pkg-config \

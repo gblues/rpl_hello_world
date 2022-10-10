@@ -3,4 +3,6 @@
 **/CMakeFiles/
 **/*.rpx
 **/*.rpl
-
+**/*.wuhb
+**/*.elf
+**/build/
