@@ -7,12 +7,12 @@
 #include <whb/log.h>
 #include <whb/log_console.h>
 
-#include <thread>
-
+#include <memory>
 #include "dlfcn.h"
 
-int
-main(int argc, char **argv)
+void test();
+
+int main(int argc, char **argv)
 {
    nn::ac::ConfigIdNum configId;
 
@@ -23,9 +23,11 @@ main(int argc, char **argv)
    WHBProcInit();
    WHBLogConsoleInit();
 
-   std::unique_ptr<dl_handle> handle = dlopen("/vol/content/libhello.rpl");
-   if(handle == nullptr) {
-    WHBLogPrintf("%s\n", dlerror());
+   test();
+   
+   WHBLogConsoleDraw();
+   while(WHBProcIsRunning()) {
+      OSSleepTicks(OSMillisecondsToTicks(100));
    }
 
    WHBLogConsoleFree();
@@ -33,4 +35,18 @@ main(int argc, char **argv)
 
    nn::ac::Finalize();
    return 0;
+}
+
+void test() {
+   auto handle = dlopen("/vol/content/libhello.rpl");
+   if(handle == nullptr) {
+      WHBLogPrintf("dlopen failed: %s\n", dlerror());
+      return;
+   }
+   auto sym = dlsym(handle, "hello_world");
+   if(sym == nullptr) {
+      WHBLogPrintf("dlsym failed: %s\n", dlerror());
+      return;
+   }
+   WHBLogPrintf("dlsym succeeded\n");
 }

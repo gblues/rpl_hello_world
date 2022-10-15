@@ -3,11 +3,14 @@
 #include <string>
 #include <vector>
 
+
+
 #include "dlfcn.h"
 #include "elfio/elfio.hpp"
 #include "utils/FileUtils.h"
 #include "module/ModuleData.h"
 #include "ElfUtils.h"
+
 
 #define LAST_ERROR_LEN 256
 
@@ -20,16 +23,18 @@ static const char *ERR_DESTINATIONS_ALLOC = "Failed to allocate memory for desti
 static const char *ERR_MODULE_ALLOC = "Failed to allocate memory for module";
 
 static size_t _getModuleSize(ELFIO::elfio &reader);
-static bool _load(ELFIO::elfio &reader, dl_handle &handle, ModuleData &moduleData);
-static bool _linkSection(ELFIO::elfio &reader, uint32_t idx, uint32_t destination, uint32_t base_text, uint32_t base_data, relocation_trampolin_entry_t *trampoline_data, uint32_t trampolin_data_length);
+static bool _load(ELFIO::elfio &reader, dl_handle *handle);
 static std::vector<RelocationData> _getImportRelocationData(const ELFIO::elfio &reader, uint8_t **destinations);
 
+#if 0
+static bool _linkSection(ELFIO::elfio &reader, uint32_t idx, uint32_t destination, uint32_t base_text, uint32_t base_data, relocation_trampolin_entry_t *trampoline_data, uint32_t trampolin_data_length);
+#endif 
+
 std::unique_ptr<dl_handle> dlopen(const char *filename) {
+    dl_handle *handle = new dl_handle();
     ELFIO::elfio reader;
-    ModuleData moduleData;
     uint8_t *buffer = nullptr;
     uint32_t fsize  = 0;
-    dl_handle handle;
 
     if (LoadFileToMem(filename, &buffer, &fsize) < 0) {
         snprintf(last_error, LAST_ERROR_LEN, ERR_LOAD_FILE_TO_MEM, filename);
@@ -41,32 +46,36 @@ std::unique_ptr<dl_handle> dlopen(const char *filename) {
         goto error;
     }
 
-    handle.library_size = _getModuleSize(reader);
-    handle.library = aligned_alloc(0x100, handle.library_size);
-    if(!handle.library) {
+    handle->library_size = _getModuleSize(reader);
+    handle->library = aligned_alloc(0x100, handle->library_size);
+    if(!handle->library) {
         snprintf(last_error, LAST_ERROR_LEN, "%s", ERR_MODULE_ALLOC);
         goto error;
     }
 
-    if(!_load(reader, handle, moduleData)) {
+    if(!_load(reader, handle)) {
         // NB: _load() will set the error message so we won't set it here
         goto error;
     }
 
     free(buffer);
-    return std::unique_ptr<dl_handle>(&handle);
+    return std::unique_ptr<dl_handle>(handle);
 
     error:
 
     has_error = true;
     if(buffer)
         free(buffer);
+    if(handle)
+        delete handle;
 
     return nullptr;
 }
 
-void *dlsym(std::unique_ptr<ModuleData> &handle, const char *symbol) {
-    return NULL;
+void *dlsym(std::unique_ptr<dl_handle> &handle, const char *symbol) {
+    snprintf(last_error, LAST_ERROR_LEN, "Not implemented yet");
+    has_error = true;
+    return nullptr;
 }
 
 char *dlerror() {
@@ -93,8 +102,8 @@ static size_t _getModuleSize(ELFIO::elfio &reader) {
     return (size + 0x100) & 0xffffff00;
 }
 
-static bool _load(ELFIO::elfio &reader, dl_handle &handle, ModuleData &moduleData) {
-    uint32_t baseOffset = (uint32_t)handle.library;
+static bool _load(ELFIO::elfio &reader, dl_handle *handle) {
+    uint32_t baseOffset = (uint32_t)handle->library;
     uint32_t offset_text = baseOffset;
     uint32_t offset_data = offset_text;
     uint32_t entrypoint = offset_text + (uint32_t) reader.get_entry() - 0x02000000;
@@ -152,10 +161,10 @@ static bool _load(ELFIO::elfio &reader, dl_handle &handle, ModuleData &moduleDat
 
             //nextAddress = ROUNDUP(destination + sectionSize,0x100);
             if (psec->get_name() == ".bss") {
-                moduleData.setBSSLocation(destination, sectionSize);
+                handle->module_data.setBSSLocation(destination, sectionSize);
                 // DEBUG_FUNCTION_LINE("Saved %s section info. Location: %08X size: %08X", psec->get_name().c_str(), destination, sectionSize);
             } else if (psec->get_name() == ".sbss") {
-                moduleData.setSBSSLocation(destination, sectionSize);
+                handle->module_data.setSBSSLocation(destination, sectionSize);
                 // DEBUG_FUNCTION_LINE("Saved %s section info. Location: %08X size: %08X", psec->get_name().c_str(), destination, sectionSize);
             }
             totalSize += sectionSize;
@@ -167,6 +176,7 @@ static bool _load(ELFIO::elfio &reader, dl_handle &handle, ModuleData &moduleDat
         }
     }
 
+/*
     for (uint32_t i = 0; i < sec_num; ++i) {
         ELFIO::section *psec = reader.sections[i];
         if ((psec->get_type() == SHT_PROGBITS || psec->get_type() == SHT_NOBITS) && (psec->get_flags() & SHF_ALLOC)) {
@@ -177,17 +187,18 @@ static bool _load(ELFIO::elfio &reader, dl_handle &handle, ModuleData &moduleDat
             }
         }
     }
+*/
 
     relocationData = _getImportRelocationData(reader, destinations);
 
     for (auto const &reloc : relocationData) {
-        moduleData.addRelocationData(reloc);
+        handle->module_data.addRelocationData(reloc);
     }
 
     DCFlushRange((void *) baseOffset, totalSize);
     ICInvalidateRange((void *) baseOffset, totalSize);
 
-    moduleData.setEntrypoint(entrypoint);
+    handle->module_data.setEntrypoint(entrypoint);
 
     free(destinations);
     return true;
@@ -199,56 +210,6 @@ static bool _load(ELFIO::elfio &reader, dl_handle &handle, ModuleData &moduleDat
         free(destinations);
 
     return false;
-}
-
-static bool _linkSection(ELFIO::elfio &reader, uint32_t section_index, uint32_t destination, uint32_t base_text, uint32_t base_data, relocation_trampolin_entry_t *trampoline_data, uint32_t trampolin_data_length) {
-    uint32_t sec_num = reader.sections.size();
-
-    for (uint32_t i = 0; i < sec_num; ++i) {
-        ELFIO::section *psec = reader.sections[i];
-        if (psec->get_info() == section_index) {
-            ELFIO::relocation_section_accessor rel(reader, psec);
-            for (uint32_t j = 0; j < (uint32_t) rel.get_entries_num(); ++j) {
-                ELFIO::Elf64_Addr offset;
-                ELFIO::Elf_Word type;
-                ELFIO::Elf_Sxword addend;
-                std::string sym_name;
-                ELFIO::Elf64_Addr sym_value;
-                ELFIO::Elf_Half sym_section_index;
-
-                if (!rel.get_entry(j, offset, sym_value, sym_name, type, addend, sym_section_index)) {
-                    break;
-                }
-
-                auto adjusted_sym_value = (uint32_t) sym_value;
-                if ((adjusted_sym_value >= 0x02000000) && adjusted_sym_value < 0x10000000) {
-                    adjusted_sym_value -= 0x02000000;
-                    adjusted_sym_value += base_text;
-                } else if ((adjusted_sym_value >= 0x10000000) && adjusted_sym_value < 0xC0000000) {
-                    adjusted_sym_value -= 0x10000000;
-                    adjusted_sym_value += base_data;
-                } else if (adjusted_sym_value >= 0xC0000000) {
-                    // Skip imports
-                    continue;
-                } else if (adjusted_sym_value == 0x0) {
-                    //
-                } else {
-                    return false;
-                }
-
-                if (sym_section_index == SHN_ABS) {
-                    //
-                } else if (sym_section_index > SHN_LORESERVE) {
-                    return false;
-                }
-
-                if (!ElfUtils::elfLinkOne(type, offset, addend, destination, adjusted_sym_value, trampoline_data, trampolin_data_length, RELOC_TYPE_FIXED)) {
-                    return false;
-                }
-            }
-        }
-    }
-    return true;
 }
 
 static std::vector<RelocationData> _getImportRelocationData(const ELFIO::elfio &reader, uint8_t **destinations) {
@@ -300,3 +261,56 @@ static std::vector<RelocationData> _getImportRelocationData(const ELFIO::elfio &
     }
     return result;
 }
+
+#if 0
+
+static bool _linkSection(ELFIO::elfio &reader, uint32_t section_index, uint32_t destination, uint32_t base_text, uint32_t base_data, relocation_trampolin_entry_t *trampoline_data, uint32_t trampolin_data_length) {
+    uint32_t sec_num = reader.sections.size();
+
+    for (uint32_t i = 0; i < sec_num; ++i) {
+        ELFIO::section *psec = reader.sections[i];
+        if (psec->get_info() == section_index) {
+            ELFIO::relocation_section_accessor rel(reader, psec);
+            for (uint32_t j = 0; j < (uint32_t) rel.get_entries_num(); ++j) {
+                ELFIO::Elf64_Addr offset;
+                ELFIO::Elf_Word type;
+                ELFIO::Elf_Sxword addend;
+                std::string sym_name;
+                ELFIO::Elf64_Addr sym_value;
+                ELFIO::Elf_Half sym_section_index;
+
+                if (!rel.get_entry(j, offset, sym_value, sym_name, type, addend, sym_section_index)) {
+                    break;
+                }
+
+                auto adjusted_sym_value = (uint32_t) sym_value;
+                if ((adjusted_sym_value >= 0x02000000) && adjusted_sym_value < 0x10000000) {
+                    adjusted_sym_value -= 0x02000000;
+                    adjusted_sym_value += base_text;
+                } else if ((adjusted_sym_value >= 0x10000000) && adjusted_sym_value < 0xC0000000) {
+                    adjusted_sym_value -= 0x10000000;
+                    adjusted_sym_value += base_data;
+                } else if (adjusted_sym_value >= 0xC0000000) {
+                    // Skip imports
+                    continue;
+                } else if (adjusted_sym_value == 0x0) {
+                    //
+                } else {
+                    return false;
+                }
+
+                if (sym_section_index == SHN_ABS) {
+                    //
+                } else if (sym_section_index > SHN_LORESERVE) {
+                    return false;
+                }
+
+                if (!ElfUtils::elfLinkOne(type, offset, addend, destination, adjusted_sym_value, trampoline_data, trampolin_data_length, RELOC_TYPE_FIXED)) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+#endif 

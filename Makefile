@@ -16,13 +16,20 @@ include $(DEVKITPRO)/wut/share/wut_rules
 # SOURCES is a list of directories containing source code
 # DATA is a list of directories containing data files
 # INCLUDES is a list of directories containing header files
+# CONTENT is the path to the bundled folder that will be mounted as /vol/content/
+# ICON is the game icon, leave blank to use default rule
+# TV_SPLASH is the image displayed during bootup on the TV, leave blank to use default rule
+# DRC_SPLASH is the image displayed during bootup on the DRC, leave blank to use default rule
 #-------------------------------------------------------------------------------
 TARGET		:=	$(notdir $(CURDIR))
 BUILD		:=	build
 SOURCES		:=	source source/utils
 DATA		:=	data
 INCLUDES	:=	include
-
+CONTENT		:=  content
+ICON		:=  pkg/icon.png
+TV_SPLASH	:=
+DRC_SPLASH	:=
 #-------------------------------------------------------------------------------
 # options for code generation
 #-------------------------------------------------------------------------------
@@ -113,8 +120,8 @@ DEPENDS	:=	$(OFILES:.o=.d)
 #-------------------------------------------------------------------------------
 # main targets
 #-------------------------------------------------------------------------------
-all	:	$(OUTPUT).rpx
-
+all	:	$(OUTPUT).wuhb
+$(OUTPUT).wuhb	:	$(OUTPUT).rpx
 $(OUTPUT).rpx	:	$(OUTPUT).elf
 $(OUTPUT).elf	:	$(OFILES)
 
