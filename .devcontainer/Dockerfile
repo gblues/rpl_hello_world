@@ -36,7 +36,7 @@ RUN export DEBIAN_FRONTEND=noninteractive \
     && update-locale LANG=en_US.UTF-8 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
-    && dkp-pacman -Syyu --noconfirm --needed wiiu-dev
+    && dkp-pacman -Syyu --noconfirm --needed wiiu-dev ppc-zlib
 
 ENV LANG en_US.UTF-8
 ENV DEVKITPRO=/opt/devkitpro
