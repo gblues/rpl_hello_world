@@ -11,15 +11,12 @@ typedef struct dl_handle_t {
     size_t library_size;
     ModuleData module_data;
 
-    dl_handle_t() : module_data(ModuleData()) {
-        WHBLogPrintf("dl_handle create\n");
-    }
+    dl_handle_t() : module_data(ModuleData()) {}
     ~dl_handle_t() {
         if(library) {
             free(library);
             library = nullptr;
         }
-        WHBLogPrintf("dl_handle destroy\n");
     }
 } dl_handle;
 

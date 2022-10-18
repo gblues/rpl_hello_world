@@ -4,12 +4,13 @@ script_dir=$(cd $(dirname $0) && pwd)
 mkdir -p $script_dir/lib/build
 cd $script_dir/lib/build
 if [ ! -e Makefile ]; then
-  wiiu_cmake ../libhello
+  wiiu-cmake ../libhello
 fi
 
 make clean && make
 cd $script_dir/
-mkdir content
+make clean
+mkdir -p content
 mv $script_dir/lib/build/*.rpl content
 
-make
+make V=1

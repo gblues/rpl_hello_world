@@ -8,6 +8,28 @@ endif
 
 TOPDIR ?= $(CURDIR)
 
+#-------------------------------------------------------------------------------
+# APP_NAME sets the long name of the application. This is what will show when the app is highlighted on the system menu
+# APP_SHORTNAME sets the short name of the application. This is shown in the suspend menu when you press the Home button on the gamepad.
+# APP_AUTHOR sets the author of the application
+# APP_CONTENT is the path to the bundled folder that will be mounted as /vol/content/
+# APP_ICON is the game icon (128x128), leave blank to use default rule.
+# APP_TV_SPLASH is the image displayed during bootup on the TV (1920x1080), leave blank to use default rule
+# APP_DRC_SPLASH is the image displayed during bootup on the DRC (854x480), leave blank to use default rule
+#-------------------------------------------------------------------------------
+APP_NAME		:= WUT dynamic library demo
+APP_SHORTNAME	:= dlopen demo
+APP_AUTHOR		:= Nathan Strong
+
+APP_CONTENT		:=
+APP_ICON		:=
+APP_TV_SPLASH	:=
+APP_DRC_SPLASH	:=
+APP_CONTENT		:= $(TOPDIR)/content
+APP_ICON		:= $(TOPDIR)/pkg/icon.png
+APP_TV_SPLASH	:=
+APP_DRC_SPLASH	:= $(TOPDIR)/pkg/drc.png
+
 include $(DEVKITPRO)/wut/share/wut_rules
 
 #-------------------------------------------------------------------------------
@@ -16,20 +38,12 @@ include $(DEVKITPRO)/wut/share/wut_rules
 # SOURCES is a list of directories containing source code
 # DATA is a list of directories containing data files
 # INCLUDES is a list of directories containing header files
-# CONTENT is the path to the bundled folder that will be mounted as /vol/content/
-# ICON is the game icon, leave blank to use default rule
-# TV_SPLASH is the image displayed during bootup on the TV, leave blank to use default rule
-# DRC_SPLASH is the image displayed during bootup on the DRC, leave blank to use default rule
 #-------------------------------------------------------------------------------
 TARGET		:=	$(notdir $(CURDIR))
 BUILD		:=	build
 SOURCES		:=	source source/utils
 DATA		:=	data
 INCLUDES	:=	include
-CONTENT		:=  content
-ICON		:=  pkg/icon.png
-TV_SPLASH	:=
-DRC_SPLASH	:=
 #-------------------------------------------------------------------------------
 # options for code generation
 #-------------------------------------------------------------------------------

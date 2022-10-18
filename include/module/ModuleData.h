@@ -18,6 +18,8 @@
 #pragma once
 
 #include "RelocationData.h"
+#include "SymbolData.h"
+
 #include <string>
 #include <vector>
 
@@ -45,8 +47,16 @@ public:
         relocation_data_list.push_back(relocation_data);
     }
 
+    void addGlobalFunction(const SymbolData &symbol_data) {
+        global_function_list.push_back(symbol_data);
+    }
+
     [[nodiscard]] const std::vector<RelocationData> &getRelocationDataList() const {
         return relocation_data_list;
+    }
+
+    [[nodiscard]] const std::vector<SymbolData> &getGlobalFunctionList() const {
+        return global_function_list;
     }
 
     [[nodiscard]] uint32_t getBSSAddr() const {
@@ -73,6 +83,8 @@ public:
 
 private:
     std::vector<RelocationData> relocation_data_list;
+    // NB: This is the symtab filtered by binding==STB_GLOBAL and type==STT_FUNC
+    std::vector<SymbolData> global_function_list;
 
     uint32_t bssAddr    = 0;
     uint32_t bssSize    = 0;

@@ -3,12 +3,13 @@
 #include <string>
 #include <vector>
 
-
+#include <whb/log_console.h>
 
 #include "dlfcn.h"
 #include "elfio/elfio.hpp"
 #include "utils/FileUtils.h"
 #include "module/ModuleData.h"
+#include "module/SymbolData.h"
 #include "ElfUtils.h"
 
 
@@ -73,7 +74,33 @@ std::unique_ptr<dl_handle> dlopen(const char *filename) {
 }
 
 void *dlsym(std::unique_ptr<dl_handle> &handle, const char *symbol) {
-    snprintf(last_error, LAST_ERROR_LEN, "Not implemented yet");
+    uint32_t base_address = (uint32_t) handle->library;
+
+    if(handle == nullptr) {
+        snprintf(last_error, LAST_ERROR_LEN, "invalid handle");
+        goto error;
+    }
+    if(symbol == nullptr || *symbol == '\0') {
+        snprintf(last_error, LAST_ERROR_LEN, "Null or empty symbol");
+        goto error;
+    }
+
+    for(auto const &func : handle->module_data.getGlobalFunctionList()) {
+
+        if(!strcmp(symbol, func.getName().c_str())) {
+            uint32_t offset = func.getOffset();
+            uint32_t base_address = (uint32_t)handle->library;
+            
+            if(offset >= 0xC0000000) {
+                snprintf(last_error, LAST_ERROR_LEN, "symbol %s: loading from section 0xC00000000 is NOT supported.", symbol);
+                goto error;
+            }
+            return (void *)(base_address + offset);
+        }
+    }
+    snprintf(last_error, LAST_ERROR_LEN, "No symbol matching '%s' found", symbol);
+
+    error:
     has_error = true;
     return nullptr;
 }
@@ -102,6 +129,8 @@ static size_t _getModuleSize(ELFIO::elfio &reader) {
     return (size + 0x100) & 0xffffff00;
 }
 
+static int load_count = 0;
+
 static bool _load(ELFIO::elfio &reader, dl_handle *handle) {
     uint32_t baseOffset = (uint32_t)handle->library;
     uint32_t offset_text = baseOffset;
@@ -112,6 +141,8 @@ static bool _load(ELFIO::elfio &reader, dl_handle *handle) {
 
     uint8_t **destinations;
     size_t sec_num = reader.sections.size();
+
+    WHBLogPrintf("load_count: %d\n", ++load_count);
 
     destinations = (uint8_t **) malloc(sizeof(uint8_t *) * sec_num);
     if(!destinations) {
@@ -176,6 +207,19 @@ static bool _load(ELFIO::elfio &reader, dl_handle *handle) {
         }
     }
 
+    for (uint32_t i = 0; i < sec_num; ++i) {
+        ELFIO::section *psec = reader.sections[i];
+        if(psec->get_type() == SHT_SYMTAB) {
+            const ELFIO::symbol_section_accessor symbols( reader, psec );
+            
+            for ( unsigned int j = 0; j < symbols.get_symbols_num(); ++j ) {
+                SymbolData sym = SymbolData(symbols, j);
+                if(sym.getBind() == STB_GLOBAL && sym.getType() == STT_FUNC) {
+                    handle->module_data.addGlobalFunction(sym);
+                }
+            }
+        }
+    }
 /*
     for (uint32_t i = 0; i < sec_num; ++i) {
         ELFIO::section *psec = reader.sections[i];
@@ -261,6 +305,8 @@ static std::vector<RelocationData> _getImportRelocationData(const ELFIO::elfio &
     }
     return result;
 }
+
+
 
 #if 0
 

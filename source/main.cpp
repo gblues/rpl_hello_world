@@ -6,11 +6,14 @@
 #include <whb/proc.h>
 #include <whb/log.h>
 #include <whb/log_console.h>
+#include <whb/log_udp.h>
 
 #include <memory>
 #include "dlfcn.h"
 
 void test();
+
+const char *(*hello_world_fun)();
 
 int main(int argc, char **argv)
 {
@@ -21,12 +24,14 @@ int main(int argc, char **argv)
    nn::ac::Connect(configId);
 
    WHBProcInit();
+   WHBLogUdpInit();
    WHBLogConsoleInit();
 
    test();
    
-   WHBLogConsoleDraw();
+
    while(WHBProcIsRunning()) {
+      WHBLogConsoleDraw();
       OSSleepTicks(OSMillisecondsToTicks(100));
    }
 
@@ -43,10 +48,15 @@ void test() {
       WHBLogPrintf("dlopen failed: %s\n", dlerror());
       return;
    }
-   auto sym = dlsym(handle, "hello_world");
+   auto sym = (const char* (*)())dlsym(handle, "hello_world");
    if(sym == nullptr) {
       WHBLogPrintf("dlsym failed: %s\n", dlerror());
       return;
    }
    WHBLogPrintf("dlsym succeeded\n");
+
+   #if 0
+   hello_world_fun = sym;
+   WHBLogPrintf("Calling function: %s\n", (*hello_world_fun)());
+   #endif
 }
