@@ -89,7 +89,6 @@ void *dlsym(std::unique_ptr<dl_handle> &handle, const char *symbol) {
 
         if(!strcmp(symbol, func.getName().c_str())) {
             uint32_t offset = func.getOffset();
-            uint32_t base_address = (uint32_t)handle->library;
             
             if(offset >= 0xC0000000) {
                 snprintf(last_error, LAST_ERROR_LEN, "symbol %s: loading from section 0xC00000000 is NOT supported.", symbol);

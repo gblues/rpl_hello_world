@@ -40,8 +40,6 @@ class SymbolData {
 
     private:
     void _fixup_address(ELFIO::Elf64_Addr &address) {
-        uint32_t base_address = (uint32_t)section_base_address;
-
         if ((address >= 0x02000000) && address < 0x10000000) {
             address -= 0x02000000;
         }
