@@ -33,8 +33,10 @@ static bool _doRelocation(dl_handle *handle);
 static bool _linkSection(ELFIO::elfio &reader, uint32_t idx, uint32_t destination, uint32_t base_text, uint32_t base_data);
 
 
+
 std::unique_ptr<dl_handle> dlopen(const char *filename) {
     dl_handle *handle = new dl_handle();
+    auto result = std::unique_ptr<dl_handle>(handle);
     ELFIO::elfio reader;
     uint8_t *buffer = nullptr;
     uint32_t fsize  = 0;
@@ -66,15 +68,21 @@ std::unique_ptr<dl_handle> dlopen(const char *filename) {
     }
 
     free(buffer);
-    return std::unique_ptr<dl_handle>(handle);
+
+    handle->entrypoint = (rpl_entrypoint_fn)dlsym(result, "rpl_entry");
+    if(handle->entrypoint && !handle->entrypoint(nullptr, OS_DYNLOAD_LOADED)) {
+        snprintf(last_error, LAST_ERROR_LEN, "library failed to initialize");
+        goto error;
+    }
+
+    return result;
 
     error:
 
     has_error = true;
+
     if(buffer)
         free(buffer);
-    if(handle)
-        delete handle;
 
     return nullptr;
 }
@@ -134,8 +142,6 @@ static size_t _getModuleSize(ELFIO::elfio &reader) {
     return (size + 0x100) & 0xffffff00;
 }
 
-static int load_count = 0;
-
 static bool _load(ELFIO::elfio &reader, dl_handle *handle) {
     uint32_t baseOffset = (uint32_t)handle->library;
     uint32_t offset_text = baseOffset;
@@ -146,8 +152,6 @@ static bool _load(ELFIO::elfio &reader, dl_handle *handle) {
 
     uint8_t **destinations;
     size_t sec_num = reader.sections.size();
-
-    WHBLogPrintf("load_count: %d\n", ++load_count);
 
     destinations = (uint8_t **) malloc(sizeof(uint8_t *) * sec_num);
     if(!destinations) {
