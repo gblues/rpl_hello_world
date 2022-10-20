@@ -12,6 +12,7 @@
 #include "module/ModuleData.h"
 #include "module/SymbolData.h"
 #include "ElfUtils.h"
+#include <coreinit/dynload.h>
 
 
 #define LAST_ERROR_LEN 256
@@ -26,11 +27,11 @@ static const char *ERR_MODULE_ALLOC = "Failed to allocate memory for module";
 
 static size_t _getModuleSize(ELFIO::elfio &reader);
 static bool _load(ELFIO::elfio &reader, dl_handle *handle);
+static bool _init(ELFIO::elfio &reader, dl_handle *handle);
 static std::vector<RelocationData> _getImportRelocationData(const ELFIO::elfio &reader, uint8_t **destinations);
+static bool _doRelocation(dl_handle *handle);
+static bool _linkSection(ELFIO::elfio &reader, uint32_t idx, uint32_t destination, uint32_t base_text, uint32_t base_data);
 
-#if 0
-static bool _linkSection(ELFIO::elfio &reader, uint32_t idx, uint32_t destination, uint32_t base_text, uint32_t base_data, relocation_trampolin_entry_t *trampoline_data, uint32_t trampolin_data_length);
-#endif 
 
 std::unique_ptr<dl_handle> dlopen(const char *filename) {
     dl_handle *handle = new dl_handle();
@@ -57,6 +58,10 @@ std::unique_ptr<dl_handle> dlopen(const char *filename) {
 
     if(!_load(reader, handle)) {
         // NB: _load() will set the error message so we won't set it here
+        goto error;
+    }
+
+    if(!_init(reader, handle)) {
         goto error;
     }
 
@@ -220,18 +225,17 @@ static bool _load(ELFIO::elfio &reader, dl_handle *handle) {
             }
         }
     }
-/*
+
     for (uint32_t i = 0; i < sec_num; ++i) {
         ELFIO::section *psec = reader.sections[i];
         if ((psec->get_type() == SHT_PROGBITS || psec->get_type() == SHT_NOBITS) && (psec->get_flags() & SHF_ALLOC)) {
             DEBUG_FUNCTION_LINE("Linking (%d)... %s", i, psec->get_name().c_str());
-            if (!_linkSection(reader, psec->get_index(), (uint32_t) destinations[psec->get_index()], offset_text, offset_data, handle.trampolines, DYN_LINK_TRAMPOLIN_LIST_LENGTH)) {
+            if (!_linkSection(reader, psec->get_index(), (uint32_t) destinations[psec->get_index()], offset_text, offset_data)) {
                 snprintf(last_error, LAST_ERROR_LEN, "Failed to link %d: %s", i, psec->get_name().c_str());
                 goto error;
             }
         }
     }
-*/
 
     relocationData = _getImportRelocationData(reader, destinations);
 
@@ -254,6 +258,23 @@ static bool _load(ELFIO::elfio &reader, dl_handle *handle) {
         free(destinations);
 
     return false;
+}
+
+static bool _init(ELFIO::elfio &reader, dl_handle *handle) {
+        if (!_doRelocation(handle)) {
+            DEBUG_FUNCTION_LINE("relocations failed");
+        }
+
+        if (handle->module_data.getBSSAddr() != 0) {
+            memset((void *) handle->module_data.getBSSAddr(), 0, handle->module_data.getBSSSize());
+        }
+        if (handle->module_data.getSBSSAddr() != 0) {
+            memset((void *) handle->module_data.getSBSSAddr(), 0, handle->module_data.getSBSSSize());
+        }
+        DCFlushRange((void *) 0x00800000, 0x00800000);
+        ICInvalidateRange((void *) 0x00800000, 0x00800000);
+        // return handle->library.getEntrypoint();
+        return true;
 }
 
 static std::vector<RelocationData> _getImportRelocationData(const ELFIO::elfio &reader, uint8_t **destinations) {
@@ -306,12 +327,35 @@ static std::vector<RelocationData> _getImportRelocationData(const ELFIO::elfio &
     return result;
 }
 
+static bool _doRelocation(dl_handle *handle) {
+    std::vector<RelocationData> relocData = handle->module_data.getRelocationDataList();
+
+    for (auto const &curReloc : relocData) {
+        const RelocationData &cur  = curReloc;
+        std::string functionName   = cur.getName();
+        std::string rplName        = cur.getImportRPLInformation().getName();
+        int32_t isData             = cur.getImportRPLInformation().isData();
 
 
-#if 0
+        OSDynLoad_Module rplHandle = nullptr;
+        OSDynLoad_Acquire(rplName.c_str(), &rplHandle);
 
-static bool _linkSection(ELFIO::elfio &reader, uint32_t section_index, uint32_t destination, uint32_t base_text, uint32_t base_data, relocation_trampolin_entry_t *trampoline_data, uint32_t trampolin_data_length) {
+        uint32_t functionAddress = 0;
+        OSDynLoad_FindExport(rplHandle, isData, functionName.c_str(), (void **) &functionAddress);
+        if (functionAddress == 0) {
+            return false;
+        }
+        if (!ElfUtils::elfLinkOne(cur.getType(), cur.getOffset(), cur.getAddend(), (uint32_t) cur.getDestination(), functionAddress, nullptr, 0, RELOC_TYPE_IMPORT)) {
+            DEBUG_FUNCTION_LINE("Relocation failed");
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool _linkSection(ELFIO::elfio &reader, uint32_t section_index, uint32_t destination, uint32_t base_text, uint32_t base_data) {
     uint32_t sec_num = reader.sections.size();
+    uint32_t failure_count = 0;
 
     for (uint32_t i = 0; i < sec_num; ++i) {
         ELFIO::section *psec = reader.sections[i];
@@ -351,12 +395,14 @@ static bool _linkSection(ELFIO::elfio &reader, uint32_t section_index, uint32_t 
                     return false;
                 }
 
-                if (!ElfUtils::elfLinkOne(type, offset, addend, destination, adjusted_sym_value, trampoline_data, trampolin_data_length, RELOC_TYPE_FIXED)) {
-                    return false;
+                if (!ElfUtils::elfLinkOne(type, offset, addend, destination, adjusted_sym_value, nullptr, 0, RELOC_TYPE_FIXED)) {
+                    failure_count++;
                 }
             }
         }
     }
+    if(failure_count > 0) {
+        WHBLogPrintf("WARN: %d link failures occurred\n", failure_count);
+    }
     return true;
 }
-#endif 

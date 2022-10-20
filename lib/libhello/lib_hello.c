@@ -3,9 +3,15 @@
 #include <coreinit/dynload.h>
 
 int
-hello_world()
+answer_to_life()
 {
    return 42;
+}
+
+const char *
+hello_world()
+{
+   return "Hello, World!";
 }
 
 int

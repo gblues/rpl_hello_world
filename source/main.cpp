@@ -13,7 +13,8 @@
 
 void test();
 
-int (*hello_world_fun)();
+const char *(*hello_world_fun)();
+int (*answer_to_life_fun)();
 
 int main(int argc, char **argv)
 {
@@ -48,18 +49,28 @@ void test() {
       WHBLogPrintf("dlopen failed: %s\n", dlerror());
       return;
    }
-   auto sym = (int (*)())dlsym(handle, "hello_world");
-   if(sym == nullptr) {
-      WHBLogPrintf("dlsym failed: %s\n", dlerror());
+
+   auto hello_world_sym = (const char *(*)())dlsym(handle, "hello_world");
+   if(hello_world_sym == nullptr) {
+      WHBLogPrintf("failed to find hello_world symbol: %s\n", dlerror());
       return;
    }
-   WHBLogPrintf("dlsym succeeded\n");
+
+   auto answer_to_life_sym = (int (*)())dlsym(handle, "answer_to_life");
+   if(answer_to_life_sym == nullptr) {
+      WHBLogPrintf("failed to find answer_to_life symbol: %s\n", dlerror());
+      return;
+   }
+   WHBLogPrintf("All symbols found\n");
 
    #if 1
-   hello_world_fun = sym;
-   int hello_world = hello_world_fun();
+   hello_world_fun = hello_world_sym;
+   answer_to_life_fun = answer_to_life_sym;
+   const char *hello_world = hello_world_fun();
+   int answer_to_life = answer_to_life_fun();
 
-   WHBLogPrintf("invoking sym returned %d\n", hello_world);
+   WHBLogPrintf("hello_world: %s\n", hello_world);
+   WHBLogPrintf("answer_to_life: %d\n", answer_to_life);
 
    #endif
 }
