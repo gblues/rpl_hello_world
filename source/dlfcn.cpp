@@ -4,6 +4,7 @@
 #include <vector>
 
 #include <whb/log_console.h>
+#include <memory/mappedmemory.h>
 
 #include "dlfcn.h"
 #include "elfio/elfio.hpp"
@@ -48,7 +49,7 @@ std::unique_ptr<dl_handle> dlopen(const char *filename) {
     }
 
     handle->library_size = _getModuleSize(reader);
-    handle->library = aligned_alloc(0x100, handle->library_size);
+    handle->library = MEMAllocFromMappedMemoryEx(handle->library_size, 0x100);
     if(!handle->library) {
         snprintf(last_error, LAST_ERROR_LEN, "%s", ERR_MODULE_ALLOC);
         goto error;

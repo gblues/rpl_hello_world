@@ -2,10 +2,10 @@
 
 #include <coreinit/dynload.h>
 
-const char *
+int
 hello_world()
 {
-   return "Hello, World!";
+   return 42;
 }
 
 int

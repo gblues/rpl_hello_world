@@ -31,7 +31,7 @@ APP_TV_SPLASH	:=
 APP_DRC_SPLASH	:= $(TOPDIR)/pkg/drc.png
 
 include $(DEVKITPRO)/wut/share/wut_rules
-
+WUMS_ROOT := $(DEVKITPRO)/wums
 #-------------------------------------------------------------------------------
 # TARGET is the name of the output
 # BUILD is the directory where object files & intermediate files will be placed
@@ -55,15 +55,15 @@ CFLAGS	+=	$(INCLUDE) -D__WIIU__ -D__WUT__
 CXXFLAGS	:= $(CFLAGS) -std=c++17
 
 ASFLAGS	:=	-g $(ARCH)
-LDFLAGS	=	-g $(ARCH) $(RPXSPECS) -Wl,-Map,$(notdir $*.map)
+LDFLAGS	=	-g $(ARCH) $(RPXSPECS) -Wl,-Map,$(notdir $*.map) -T$(WUMS_ROOT)/share/libmappedmemory.ld
 
-LIBS	:= -lwut -lz
+LIBS	:= -lwut -lz -lmappedmemory
 
 #-------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level
 # containing include and lib
 #-------------------------------------------------------------------------------
-LIBDIRS	:= $(PORTLIBS) $(WUT_ROOT)
+LIBDIRS	:= $(PORTLIBS) $(WUT_ROOT) $(WUMS_ROOT)
 
 
 #-------------------------------------------------------------------------------

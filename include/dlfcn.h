@@ -1,6 +1,7 @@
 #ifndef DLFCN_H
 #define DLFCN_H
 #include <memory>
+#include <memory/mappedmemory.h>
 #include <whb/log_console.h>
 
 #include "module/ModuleData.h"
@@ -14,7 +15,7 @@ typedef struct dl_handle_t {
     dl_handle_t() : module_data(ModuleData()) {}
     ~dl_handle_t() {
         if(library) {
-            free(library);
+            MEMFreeToMappedMemory(library);
             library = nullptr;
         }
     }

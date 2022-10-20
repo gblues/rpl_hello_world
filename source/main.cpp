@@ -13,7 +13,7 @@
 
 void test();
 
-const char *(*hello_world_fun)();
+int (*hello_world_fun)();
 
 int main(int argc, char **argv)
 {
@@ -48,15 +48,18 @@ void test() {
       WHBLogPrintf("dlopen failed: %s\n", dlerror());
       return;
    }
-   auto sym = (const char* (*)())dlsym(handle, "hello_world");
+   auto sym = (int (*)())dlsym(handle, "hello_world");
    if(sym == nullptr) {
       WHBLogPrintf("dlsym failed: %s\n", dlerror());
       return;
    }
    WHBLogPrintf("dlsym succeeded\n");
 
-   #if 0
+   #if 1
    hello_world_fun = sym;
-   WHBLogPrintf("Calling function: %s\n", (*hello_world_fun)());
+   int hello_world = hello_world_fun();
+
+   WHBLogPrintf("invoking sym returned %d\n", hello_world);
+
    #endif
 }
