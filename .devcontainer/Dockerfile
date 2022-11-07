@@ -45,3 +45,4 @@ ENV DEVKITPPC=${DEVKITPRO}/devkitPPC
 ENV PATH=${DEVKITPRO}/tools/bin:${DEVKITPPC}/bin:$PATH
 
 COPY --from=wiiuenv/libmappedmemory:20220904 /artifacts ${DEVKITPRO}
+COPY --from=wiiuenv/wiiumodulesystem:20220904 /artifacts ${DEVKITPRO}

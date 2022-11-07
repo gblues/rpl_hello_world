@@ -9,62 +9,68 @@ endif
 TOPDIR ?= $(CURDIR)
 
 #-------------------------------------------------------------------------------
-# APP_NAME sets the long name of the application. This is what will show when the app is highlighted on the system menu
-# APP_SHORTNAME sets the short name of the application. This is shown in the suspend menu when you press the Home button on the gamepad.
+# APP_NAME sets the long name of the application
+# APP_SHORTNAME sets the short name of the application
 # APP_AUTHOR sets the author of the application
-# APP_CONTENT is the path to the bundled folder that will be mounted as /vol/content/
-# APP_ICON is the game icon (128x128), leave blank to use default rule.
-# APP_TV_SPLASH is the image displayed during bootup on the TV (1920x1080), leave blank to use default rule
-# APP_DRC_SPLASH is the image displayed during bootup on the DRC (854x480), leave blank to use default rule
 #-------------------------------------------------------------------------------
-APP_NAME		:= WUT dynamic library demo
-APP_SHORTNAME	:= dlopen demo
-APP_AUTHOR		:= Nathan Strong
-
-APP_CONTENT		:=
-APP_ICON		:=
-APP_TV_SPLASH	:=
-APP_DRC_SPLASH	:=
-APP_CONTENT		:= $(TOPDIR)/content
-APP_ICON		:= $(TOPDIR)/pkg/icon.png
-APP_TV_SPLASH	:=
-APP_DRC_SPLASH	:= $(TOPDIR)/pkg/drc.png
+APP_NAME	:= RPL Hello World
+APP_SHORTNAME	:= RPL_Hello_World
+APP_AUTHOR	:= Nathan Strong
+WUMS_ROOT := $(DEVKITPRO)/wums
 
 include $(DEVKITPRO)/wut/share/wut_rules
-WUMS_ROOT := $(DEVKITPRO)/wums
+
 #-------------------------------------------------------------------------------
 # TARGET is the name of the output
 # BUILD is the directory where object files & intermediate files will be placed
 # SOURCES is a list of directories containing source code
 # DATA is a list of directories containing data files
 # INCLUDES is a list of directories containing header files
+# CONTENT is the path to the bundled folder that will be mounted as /vol/content/
+# ICON is the game icon, leave blank to use default rule
+# TV_SPLASH is the image displayed during bootup on the TV, leave blank to use default rule
+# DRC_SPLASH is the image displayed during bootup on the DRC, leave blank to use default rule
 #-------------------------------------------------------------------------------
 TARGET		:=	$(notdir $(CURDIR))
 BUILD		:=	build
-SOURCES		:=	source source/utils
+SOURCES		:=	source source/library
 DATA		:=	data
-INCLUDES	:=	include
+INCLUDES	:=	source
+CONTENT		:=  content
+ICON		:= pkg/icon.png
+TV_SPLASH	:= 
+DRC_SPLASH	:= pkg/drc.png
+
 #-------------------------------------------------------------------------------
 # options for code generation
 #-------------------------------------------------------------------------------
-CFLAGS	:=	-g -Wall -O2 -ffunction-sections \
+CFLAGS	:=	-Wall -O2 -ffunction-sections \
 			$(MACHDEP)
 
 CFLAGS	+=	$(INCLUDE) -D__WIIU__ -D__WUT__
 
-CXXFLAGS	:= $(CFLAGS) -std=c++17
+CXXFLAGS	:= $(CFLAGS) -std=c++17 -fno-exceptions -fno-rtti
 
 ASFLAGS	:=	-g $(ARCH)
-LDFLAGS	=	-g $(ARCH) $(RPXSPECS) -Wl,-Map,$(notdir $*.map) -T$(WUMS_ROOT)/share/libmappedmemory.ld
+LDFLAGS	=	-g $(ARCH) $(RPXSPECS) -Wl,-Map,$(notdir $*.map) -T$(WUMS_ROOT)/share/libmappedmemory.ld $(WUMSSPECS)
 
-LIBS	:= -lwut -lz -lmappedmemory
+ifeq ($(DEBUG),1)
+CXXFLAGS += -DDEBUG -g
+CFLAGS += -DDEBUG -g
+endif
+
+ifeq ($(DEBUG),VERBOSE)
+CXXFLAGS += -DDEBUG -DVERBOSE_DEBUG -g
+CFLAGS   += -DDEBUG -DVERBOSE_DEBUG -g
+endif
+
+LIBS	:= -lwut -lmappedmemory -lz
 
 #-------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level
 # containing include and lib
 #-------------------------------------------------------------------------------
 LIBDIRS	:= $(PORTLIBS) $(WUT_ROOT) $(WUMS_ROOT)
-
 
 #-------------------------------------------------------------------------------
 # no real need to edit anything past this point unless you need to add additional
@@ -111,6 +117,34 @@ export INCLUDE	:=	$(foreach dir,$(INCLUDES),-I$(CURDIR)/$(dir)) \
 
 export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
+ifneq (,$(strip $(CONTENT)))
+	export APP_CONTENT := $(TOPDIR)/$(CONTENT)
+endif
+
+ifneq (,$(strip $(ICON)))
+	export APP_ICON := $(TOPDIR)/$(ICON)
+else ifneq (,$(wildcard $(TOPDIR)/$(TARGET).png))
+	export APP_ICON := $(TOPDIR)/$(TARGET).png
+else ifneq (,$(wildcard $(TOPDIR)/icon.png))
+	export APP_ICON := $(TOPDIR)/icon.png
+endif
+
+ifneq (,$(strip $(TV_SPLASH)))
+	export APP_TV_SPLASH := $(TOPDIR)/$(TV_SPLASH)
+else ifneq (,$(wildcard $(TOPDIR)/tv-splash.png))
+	export APP_TV_SPLASH := $(TOPDIR)/tv-splash.png
+else ifneq (,$(wildcard $(TOPDIR)/splash.png))
+	export APP_TV_SPLASH := $(TOPDIR)/splash.png
+endif
+
+ifneq (,$(strip $(DRC_SPLASH)))
+	export APP_DRC_SPLASH := $(TOPDIR)/$(DRC_SPLASH)
+else ifneq (,$(wildcard $(TOPDIR)/drc-splash.png))
+	export APP_DRC_SPLASH := $(TOPDIR)/drc-splash.png
+else ifneq (,$(wildcard $(TOPDIR)/splash.png))
+	export APP_DRC_SPLASH := $(TOPDIR)/splash.png
+endif
+
 .PHONY: $(BUILD) clean all
 
 #-------------------------------------------------------------------------------
@@ -123,7 +157,7 @@ $(BUILD):
 #-------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).rpx $(TARGET).elf
+	@rm -fr $(BUILD) $(TARGET).wuhb $(TARGET).rpx $(TARGET).elf
 
 #-------------------------------------------------------------------------------
 else
@@ -135,6 +169,7 @@ DEPENDS	:=	$(OFILES:.o=.d)
 # main targets
 #-------------------------------------------------------------------------------
 all	:	$(OUTPUT).wuhb
+
 $(OUTPUT).wuhb	:	$(OUTPUT).rpx
 $(OUTPUT).rpx	:	$(OUTPUT).elf
 $(OUTPUT).elf	:	$(OFILES)

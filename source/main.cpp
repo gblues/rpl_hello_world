@@ -1,3 +1,6 @@
+#include <memory>
+#include <string>
+
 #include <coreinit/thread.h>
 #include <coreinit/time.h>
 #include <coreinit/systeminfo.h>
@@ -6,15 +9,12 @@
 #include <whb/proc.h>
 #include <whb/log.h>
 #include <whb/log_console.h>
-#include <whb/log_udp.h>
 
-#include <memory>
 #include "dlfcn.h"
+#include "logger.h"
 
-void test();
-
-const char *(*hello_world_fun)();
-int (*answer_to_life_fun)();
+void test_dlopen();
+typedef const char *(*my_first_export_fn)();
 
 int main(int argc, char **argv)
 {
@@ -25,52 +25,47 @@ int main(int argc, char **argv)
    nn::ac::Connect(configId);
 
    WHBProcInit();
-   WHBLogUdpInit();
-   WHBLogConsoleInit();
+   initLogging();
 
-   test();
-   
+   test_dlopen();
 
    while(WHBProcIsRunning()) {
+      OSCalendarTime tm;
+      OSTicksToCalendarTime(OSGetTime(), &tm);
       WHBLogConsoleDraw();
       OSSleepTicks(OSMillisecondsToTicks(100));
    }
 
-   WHBLogConsoleFree();
+   deinitLogging();
    WHBProcShutdown();
 
    nn::ac::Finalize();
    return 0;
 }
 
-void test() {
-   auto handle = dlopen("/vol/content/libhello.rpl");
-   if(handle == nullptr) {
-      WHBLogPrintf("dlopen failed: %s\n", dlerror());
-      return;
-   }
+void test_dlopen() {
+    auto handle = dlopen("/vol/content/my_first_rpl.rpl");
+    if(handle == nullptr) {
+        WHBLogPrintf("Failed to open library: %s\n", dlerror());
+        return;
+    }
 
-   auto hello_world_sym = (const char *(*)())dlsym(handle, "hello_world");
-   if(hello_world_sym == nullptr) {
-      WHBLogPrintf("failed to find hello_world symbol: %s\n", dlerror());
-      return;
-   }
+    WHBLogPrintf("Opened library successfully.\n");
+    my_first_export_fn my_first_export = (my_first_export_fn)dlsym(handle, "my_first_export");
+    if(my_first_export == nullptr) {
+        WHBLogPrintf("Failed too lookup symbol: %s\n", dlerror());
+        dlclose(handle);
+        return;
+    }
+    DEBUG_FUNCTION_LINE("my_first_export resolved to %08x", my_first_export);
+    DEBUG_FUNCTION_LINE("first 8 bytes at that address:");
 
-   auto answer_to_life_sym = (int (*)())dlsym(handle, "answer_to_life");
-   if(answer_to_life_sym == nullptr) {
-      WHBLogPrintf("failed to find answer_to_life symbol: %s\n", dlerror());
-      return;
-   }
-   WHBLogPrintf("All symbols found\n");
+    auto charbuf = std::unique_ptr<char[]>(new char[17]);
+    const char *fptr = (const char *)my_first_export;
+    snprintf(charbuf.get(), 17, "%02x%02x%02x%02x%02x%02x%02x%02x",
+        fptr[0], fptr[1], fptr[2], fptr[3], fptr[4], fptr[5], fptr[6], fptr[7]);
+    DEBUG_FUNCTION_LINE("%s", charbuf.get());
 
-   #if 1
-   hello_world_fun = hello_world_sym;
-   answer_to_life_fun = answer_to_life_sym;
-   const char *hello_world = hello_world_fun();
-   int answer_to_life = answer_to_life_fun();
-
-   WHBLogPrintf("hello_world: %s\n", hello_world);
-   WHBLogPrintf("answer_to_life: %d\n", answer_to_life);
-
-   #endif
+    WHBLogPrintf("Calling my_first_export: %s\n", (*my_first_export)());
+    dlclose(handle);
 }
